@@ -45,7 +45,7 @@ public class Main {
                     CLS.clearConsoleScreen();
                     int modType = 0;
                     if (modDetail != 0) {
-                        modDetail = UserPrompt.promptForint("0 - Back\n1 - Create Character\n2 - Create Stage");
+                        modType = UserPrompt.promptForint("0 - Back\n1 - Create Character\n2 - Create Stage");
 
                     }
 
