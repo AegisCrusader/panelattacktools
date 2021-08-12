@@ -1,9 +1,9 @@
 package com.shosoul;
 
-import java.io.BufferedReader;
+import java.awt.Desktop;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -13,126 +13,177 @@ import java.util.stream.Stream;
 import org.json.JSONObject;
 
 /**
- * Hello world!
  *
  */
 public class Main {
+    public static String panelAttackDir;
+    private static boolean includeDefaults = false;
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
 
-        final String panelAttackDir = getAppDataDirectory() + "\\Panel Attack\\";
-        final String characterDir = panelAttackDir + "characters\\";
-        final String stageDir = panelAttackDir + "stages\\";
+        panelAttackDir = getAppDataDirectory() + "\\Panel Attack\\";
+        if (Files.exists(Paths.get(panelAttackDir))) {
+            final String characterDir = panelAttackDir + "characters\\";
+            final String stageDir = panelAttackDir + "stages\\";
 
-        Path characterDirPath = Paths.get(new File(characterDir).toURI());
-        Path stageDirPath = Paths.get(new File(stageDir).toURI());
+            Path characterDirPath = Paths.get(new File(characterDir).toURI());
+            Path stageDirPath = Paths.get(new File(stageDir).toURI());
+            while (true) {
+                CLS.clearConsoleScreen();
+                int modSelection = UserPrompt.promptForint(
+                        "0 - Exit\n1 - Characters\n2 - Stages\n3 - Mod Creator\n4 - Open Panel Attack Folder\n\nEnter option:");
+                CLS.clearConsoleScreen();
+                switch (modSelection) {
+                case 1:
+                    doCharacters(characterDirPath);
+                    break;
+                case 2:
+                    doStages(stageDirPath);
+                    break;
+                case 3:
+                    int modDetail = UserPrompt.promptForint("0 - Back\n1 - Basic");
+                    CLS.clearConsoleScreen();
+                    int modType = 0;
+                    if (modDetail != 0) {
+                        modDetail = UserPrompt.promptForint("0 - Back\n1 - Create Character\n2 - Create Stage");
 
-        while (true) {            CLS.clearConsoleScreen();
+                    }
 
-            int modSelection = UserPrompt.promptForint("0 - Exit\n1 - Characters\n2 - Stages\n\nEnter option:");
-            CLS.clearConsoleScreen();
-            switch (modSelection) {
-            case 1:
-                doCharacterMods(characterDirPath);
-                break;
-            case 2:
-                doStageMods(stageDirPath);
-                break;
-            default:
-                break;
+                    switch (modDetail) {
+                    // Back
+                    case 0:
+
+                        break;
+                    // Basic Mod Maker
+                    case 1:
+                        switch (modType) {
+                        case 0:
+                            break;
+                        case 1:
+                            createMod(characterDir);
+                            break;
+                        case 2:
+                            createMod(stageDir);
+                            break;
+                        default:
+                            break;
+                        }
+                        break;
+                    // Advanced Mod Maker
+                    case 2:
+                        switch (modType) {
+                        case 0:
+                            break;
+                        case 1:
+                            createCharacterMod(characterDir);
+                            break;
+                        case 2:
+                            createMod(stageDir);
+                            break;
+                        default:
+                            break;
+                        }
+                        break;
+                    default:
+                        break;
+                    }
+
+                    break;
+                case 4:
+                    Desktop desktop = null;
+                    // On Windows, retrieve the path of the "Panel Attack" folder
+                    File file = new File(panelAttackDir);
+
+                    try {
+                        if (Desktop.isDesktopSupported()) {
+                            desktop = Desktop.getDesktop();
+                            desktop.open(file);
+                        } else {
+                            System.out.println("Desktop is not supported");
+                        }
+                    } catch (IOException e) {
+                    }
+                    break;
+                default:
+                    break;
+                }
+                if (modSelection == 0) {
+                    break;
+                }
             }
-            if (modSelection == 0) {
-                break;
-            }
+        } else {
+            UserPrompt.promptForString("Unable to detect Panel Attack Folder. Press enter to continue...");
         }
+
         System.exit(0);
 
     }
 
-    public static void doCharacterMods(Path characterDirPath) {
-        ArrayList<Path> characterConfigPaths = new ArrayList<>();
-        ArrayList<Path> modConfigPaths = new ArrayList<>();
+    public static void doCharacters(Path characterDirPath) {
+        ArrayList<PanelAttackCharacter> characterArrayList = new ArrayList<>();
 
-        // Find all the config.json files to determine mod folders
+        // Find all the config.json files to determine character folders
         try (Stream<Path> pathStream = Files.walk(characterDirPath)) {
-            pathStream.parallel().filter(Files::isRegularFile)
-                    .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json"))
-                    .forEach(characterConfigPaths::add);
+            pathStream.parallel()// parallel streams are better
+                    .filter(Files::isRegularFile)// check if not a directory
+                    .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json")).map(t -> {
+                        try {
+                            return new PanelAttackCharacter(t);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            return null;
+                        }
+                    }).forEach(characterArrayList::add);
+
         } catch (Exception e) {
+            e.printStackTrace();
+        }
+        /**
+         * If the modloader should also list default characters. If not, remove them.
+         */
+        if (!includeDefaults) {
+            characterArrayList.removeIf(PanelAttackCharacter::isDefault);
         }
 
         try {
-            for (Path path : characterConfigPaths) {
-                StringBuilder sb = new StringBuilder();
-                sb.append(Files.readString(path));
-                JSONObject configjson = new JSONObject(sb.toString());
-                String id = configjson.getString("id");
-                String name = configjson.getString("name");
-                boolean isMod = true;
-                if (id.startsWith("pa_characters")) {
-                    isMod = false;
-                }
-
-                String directoryName = path.getParent().getFileName().toString();
-                if (isMod) {
-                    modConfigPaths.add(path);
-                    /*
-                     * if (directoryName.startsWith("__")) { System.out.println(name + " [OFF]"); }
-                     * else { System.out.println(name + " [ON]"); }
-                     */
-                }
-            }
-
-            for (int i = 0; i < modConfigPaths.size(); i++) {
-                Path modpath = modConfigPaths.get(i);
-                StringBuilder sb = new StringBuilder();
-                sb.append(Files.readString(modpath));
-                JSONObject configjson = new JSONObject(sb.toString());
-                String id = configjson.getString("id");
-                String name = configjson.getString("name");
-                boolean isMod = true;
-
-                String directoryName = modpath.getParent().getFileName().toString();
-                // System.out.println(directoryName);
-
-                if (directoryName.startsWith("__")) {
-                    System.out.println(i + " - " + name + " [OFF]");
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < characterArrayList.size(); i++) {
+                PanelAttackCharacter character = characterArrayList.get(i);
+                final String CHARACTER_ENABLED = " [ON]\n";
+                final String CHARACTER_DISABLED = " [OFF]\n";
+                if (character.isEnabled()) {
+                    sb.append(i).append(" - ").append(character.getName()).append(CHARACTER_ENABLED);
                 } else {
-                    System.out.println(i + " - " + name + " [ON]");
+                    sb.append(i).append(" - ").append(character.getName()).append(CHARACTER_DISABLED);
                 }
 
             }
-            System.out.println("On - Enable all");
-            System.out.println("Off - Disable all");
-            System.out.println("");//create newline
-            String modSelection = UserPrompt.promptForString("Type the number of the mod to toggle, \"on\" to enable all, \"off\" to disable all, or \"back\" to return to the menu.");
+            sb.append("On - Enable all\n");
+            sb.append("Off - Disable all\n");
+            sb.append("\n");// create newline
+            sb.append(
+                    "Type the number of the character to toggle, \"on\" to enable all, \"off\" to disable all, or \"back\" to return to the menu.");
+            String characterSelection = UserPrompt.promptForString(sb.toString());
 
-            if (!modSelection.equalsIgnoreCase("back")) {
-                // disable all mods
-                if (modSelection.equalsIgnoreCase("off")) {
-                    for (Path path : modConfigPaths) {
-                        Path parentFolderPath = path.getParent();
-                        String dirname = parentFolderPath.getFileName().toString();
-                        if (!dirname.startsWith("__")) {
-                            Files.move(parentFolderPath, parentFolderPath.resolveSibling("__" + dirname));
+            if (!characterSelection.equalsIgnoreCase("back")) {
+                // Disable all characters
+                if (characterSelection.equalsIgnoreCase("off")) {
+                    for (PanelAttackCharacter character : characterArrayList) {
+                        if (character.isEnabled()) {
+                            character.toggleCharacter();
                         }
                     }
-                } else if (modSelection.equalsIgnoreCase("on")) {
-                    for (Path path : modConfigPaths) {
-                        Path parentFolderPath = path.getParent();
-                        String dirname = parentFolderPath.getFileName().toString();
-                        if (dirname.startsWith("__")) {
-                            Files.move(parentFolderPath, parentFolderPath.resolveSibling(dirname.substring(2)));
+                    // Enable all characters
+                } else if (characterSelection.equalsIgnoreCase("on")) {
+                    for (PanelAttackCharacter character : characterArrayList) {
+                        if (!character.isEnabled()) {
+                            character.toggleCharacter();
                         }
                     }
+                    // Toggle selected character
                 } else {
-                    Path selection = modConfigPaths.get(Integer.parseInt(modSelection)).getParent();
-                    String dirname = selection.getFileName().toString();
-                    if (dirname.startsWith("__")) {
-                        Files.move(selection, selection.resolveSibling(dirname.substring(2)));
-                    } else {
-                        Files.move(selection, selection.resolveSibling("__" + dirname));
-                    }
+                    characterArrayList.get(Integer.parseInt(characterSelection)).toggleCharacter();
+
                 }
             }
             CLS.clearConsoleScreen();
@@ -140,128 +191,82 @@ public class Main {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-        /*
-         * for (int i = 0; i < modPaths.size() - 1; i++) { Path modpath =
-         * modPaths.get(i); StringBuilder sb = new StringBuilder();
-         * sb.append(Files.readString(modpath)); JSONObject configjson = new
-         * JSONObject(sb.toString()); String id = configjson.getString("id"); String
-         * name = configjson.getString("name"); boolean isMod = true;
-         * 
-         * String directoryName = modpath.getParent().getFileName().toString(); //
-         * System.out.println(directoryName);
-         * 
-         * if (directoryName.startsWith("__")) { System.out.println(name + " [OFF]"); }
-         * else { System.out.println(name + " [ON]"); }
-         * 
-         * }
-         */
 
     }
 
-    public static void doStageMods(Path stageDirPath) {
-        ArrayList<Path> stageConfigPaths = new ArrayList<>();
-        ArrayList<Path> modConfigPaths = new ArrayList<>();
+    public static void doStages(Path stageDirPath) {
+        ArrayList<PanelAttackStage> stageArrayList = new ArrayList<>();
 
-        // Find all the config.json files to determine mod folders
+        // Find all the config.json files to determine stage folders
         try (Stream<Path> pathStream = Files.walk(stageDirPath)) {
-            pathStream.parallel().filter(Files::isRegularFile)
-                    .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json")).forEach(stageConfigPaths::add);
-        } catch (Exception e) {
-        }
-        try {
-            for (Path path : stageConfigPaths) {
-                StringBuilder sb = new StringBuilder();
-                sb.append(Files.readString(path));
-                JSONObject configjson = new JSONObject(sb.toString());
-                String id = configjson.getString("id");
-                String name = configjson.getString("name");
-                boolean isMod = true;
-                if (id.startsWith("pa_stages")) {
-                    isMod = false;
-                }
-
-                String directoryName = path.getParent().getFileName().toString();
-                if (isMod) {
-                    modConfigPaths.add(path);
-                    /*
-                     * if (directoryName.startsWith("__")) { System.out.println(name + " [OFF]"); }
-                     * else { System.out.println(name + " [ON]"); }
-                     */
-                }
-            }
-            for (int i = 0; i < modConfigPaths.size(); i++) {
-                Path modpath = modConfigPaths.get(i);
-                StringBuilder sb = new StringBuilder();
-                sb.append(Files.readString(modpath));
-                JSONObject configjson = new JSONObject(sb.toString());
-                String id = configjson.getString("id");
-                String name = configjson.getString("name");
-                boolean isMod = true;
-
-                String directoryName = modpath.getParent().getFileName().toString();
-                // System.out.println(directoryName);
-
-                if (directoryName.startsWith("__")) {
-                    System.out.println(i + " - " + name + " [OFF]");
-                } else {
-                    System.out.println(i + " - " + name + " [ON]");
-                }
-
-            }
-            System.out.println("On - Enable all");
-            System.out.println("Off - Disable all");
-            System.out.println("");//create newline
-            String modSelection = UserPrompt.promptForString("Type the number of the mod to toggle, \"on\" to enable all, \"off\" to disable all, or \"back\" to return to the menu.");
-
-            if (!modSelection.equalsIgnoreCase("back")) {
-                // disable all mods
-                if (modSelection.equalsIgnoreCase("off")) {
-                    for (Path path : modConfigPaths) {
-                        Path parentFolderPath = path.getParent();
-                        String dirname = parentFolderPath.getFileName().toString();
-                        if (!dirname.startsWith("__")) {
-                            Files.move(parentFolderPath, parentFolderPath.resolveSibling("__" + dirname));
+            pathStream.parallel()// Parallel streams are better
+                    .filter(Files::isRegularFile)// Ensure path is not a directory
+                    .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json")).map(t -> {
+                        try {
+                            return new PanelAttackStage(t);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                            return null;
                         }
-                    }
-                } else if (modSelection.equalsIgnoreCase("on")) {
-                    for (Path path : modConfigPaths) {
-                        Path parentFolderPath = path.getParent();
-                        String dirname = parentFolderPath.getFileName().toString();
-                        if (dirname.startsWith("__")) {
-                            Files.move(parentFolderPath, parentFolderPath.resolveSibling(dirname.substring(2)));
-                        }
-                    }
-                } else {
-                    Path selection = modConfigPaths.get(Integer.parseInt(modSelection)).getParent();
-                    String dirname = selection.getFileName().toString();
-                    if (dirname.startsWith("__")) {
-                        Files.move(selection, selection.resolveSibling(dirname.substring(2)));
-                    } else {
-                        Files.move(selection, selection.resolveSibling("__" + dirname));
-                    }
-                }
-            }
-            CLS.clearConsoleScreen();
+                    }).forEach(stageArrayList::add);
+
         } catch (Exception e) {
             e.printStackTrace();
         }
-
-        /*
-         * for (int i = 0; i < modPaths.size() - 1; i++) { Path modpath =
-         * modPaths.get(i); StringBuilder sb = new StringBuilder();
-         * sb.append(Files.readString(modpath)); JSONObject configjson = new
-         * JSONObject(sb.toString()); String id = configjson.getString("id"); String
-         * name = configjson.getString("name"); boolean isMod = true;
-         * 
-         * String directoryName = modpath.getParent().getFileName().toString(); //
-         * System.out.println(directoryName);
-         * 
-         * if (directoryName.startsWith("__")) { System.out.println(name + " [OFF]"); }
-         * else { System.out.println(name + " [ON]"); }
-         * 
-         * }
+        /**
+         * If the modloader should also consider default stages. If not, remove them.
          */
+        if (!includeDefaults) {
+            stageArrayList.removeIf(PanelAttackStage::isDefault);
+        }
+
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < stageArrayList.size(); i++) {
+                PanelAttackStage stage = stageArrayList.get(i);
+
+                final String STAGE_ENABLED = " [ON]\n";
+                final String STAGE_DISABLED = " [OFF]\n";
+                if (stage.isEnabled()) {
+                    sb.append(i).append(" - ").append(stage.getName()).append(STAGE_ENABLED);
+                } else {
+                    sb.append(i).append(" - ").append(stage.getName()).append(STAGE_DISABLED);
+                }
+
+            }
+            sb.append("On - Enable all\n");
+            sb.append("Off - Disable all\n");
+            sb.append("\n");
+            sb.append(
+                    "Type the number of the stage to toggle, \"on\" to enable all, \"off\" to disable all, or \"back\" to return to the menu.");
+            String stageSelection = UserPrompt.promptForString(sb.toString());
+
+            if (!stageSelection.equalsIgnoreCase("back")) {
+                // Disable all stages
+                if (stageSelection.equalsIgnoreCase("off")) {
+                    for (PanelAttackStage stage : stageArrayList) {
+                        if (stage.isEnabled()) {
+                            stage.toggleStage();
+                        }
+                    }
+                    // Enable all stages
+                } else if (stageSelection.equalsIgnoreCase("on")) {
+                    for (PanelAttackStage stage : stageArrayList) {
+                        if (!stage.isEnabled()) {
+                            stage.toggleStage();
+                        }
+                    }
+                    // Toggle selected stage
+                } else {
+                    stageArrayList.get(Integer.parseInt(stageSelection)).toggleStage();
+
+                }
+            }
+            CLS.clearConsoleScreen();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
     }
 
@@ -285,6 +290,62 @@ public class Main {
         // we are now free to set the workingDirectory to the subdirectory that is our
         // folder.
         return appdataDirectory;
+    }
+
+    // TODO:finish creation of advanced modmaker
+    public static boolean createMod(String parentDir) {
+        JSONObject configjson = new JSONObject();
+
+        try {
+            String folderName = UserPrompt.promptForString("Please name the mod folder:");
+            String id = UserPrompt.promptForString("Please enter the id of the mod:");
+            String name = UserPrompt.promptForString("Please enter the name of the mod:");
+
+            Path newModFolderPath = Files.createDirectory(Paths.get(parentDir, folderName));
+            configjson.put("id", id);
+            configjson.put("name", name);
+            try (FileWriter fw = new FileWriter(newModFolderPath + "\\config.json")) {
+
+                fw.write(configjson.toString());
+            } catch (Exception e) {
+                e.printStackTrace();
+                System.exit(1);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return true;
+    }
+
+    public static boolean createCharacterMod(String parentDir) {
+        JSONObject configjson = new JSONObject();
+
+        try {
+            String folderName = UserPrompt.promptForString("Name the character folder:");
+            String id = UserPrompt.promptForString("Enter the id for the character:");
+            String name = UserPrompt.promptForString("Enter the name for the character:");
+            String stage = UserPrompt.promptForString("Enter the stage id for the character (optional):");
+
+            Path newModFolderPath = Files.createDirectory(Paths.get(parentDir, folderName));
+            configjson.put("id", id);
+            configjson.put("name", name);
+            if (!stage.isBlank()) {
+                configjson.put("stage", stage);
+            }
+
+            try (FileWriter fw = new FileWriter(newModFolderPath + "\\config.json")) {
+
+                fw.write(configjson.toString());
+            } catch (Exception e) {
+                e.printStackTrace();
+                System.exit(1);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return true;
     }
 
 }
