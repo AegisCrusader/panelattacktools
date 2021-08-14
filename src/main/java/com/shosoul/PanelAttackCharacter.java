@@ -39,6 +39,21 @@ public class PanelAttackCharacter {
     }
 
     /**
+     * A class containing information about a character.
+     * 
+     * @param configPath the path to the character config.json file
+     * @param configjson
+     */
+    public PanelAttackCharacter(Path configPath, JSONObject configjson) {
+        this.configPath = configPath;
+        this.configjson = configjson;
+        id = configjson.getString("id");
+        name = configjson.getString("name");
+        isEnabled = !configPath.getParent().getFileName().toString().startsWith("__");
+        isDefault = id.startsWith(DEFAULT_ID_PREFIX);
+    }
+
+    /**
      * @return the configPath
      */
     public Path getConfigPath() {
@@ -93,7 +108,6 @@ public class PanelAttackCharacter {
 
     /**
      * Toggles the character.
-     * 
      * @return if the character was toggled successfully.
      */
     public boolean toggleCharacter() {

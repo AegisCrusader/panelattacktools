@@ -1,5 +1,6 @@
 com\shosoul\PanelAttackCharacter.class
 com\shosoul\UserPrompt.class
+module-info.class
 com\shosoul\Main.class
 com\shosoul\CLS.class
 com\shosoul\PanelAttackStage.class

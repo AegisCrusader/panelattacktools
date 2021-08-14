@@ -1,6 +1,5 @@
 package com.shosoul;
 
-import java.awt.Desktop;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -9,7 +8,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.stream.Stream;
+import java.awt.Desktop;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
@@ -31,7 +32,7 @@ public class Main {
             while (true) {
                 CLS.clearConsoleScreen();
                 int modSelection = UserPrompt.promptForint(
-                        "0 - Exit\n1 - Characters\n2 - Stages\n3 - Mod Creator\n4 - Open Panel Attack Folder\n\nEnter option:");
+                        "0 - Exit\n1 - Characters\n2 - Stages\n3 - Mod Creator\n4 - Open Panel Attack Folder\n5 - Validate config files\n\nEnter option:");
                 CLS.clearConsoleScreen();
                 switch (modSelection) {
                 case 1:
@@ -90,8 +91,8 @@ public class Main {
 
                     break;
                 case 4:
-                    Desktop desktop = null;
-                    // On Windows, retrieve the path of the "Panel Attack" folder
+
+                    Desktop desktop = null; // On Windows, retrieve the path of the "Panel Attack" folder
                     File file = new File(panelAttackDir);
 
                     try {
@@ -103,6 +104,12 @@ public class Main {
                         }
                     } catch (IOException e) {
                     }
+                    break;
+
+                case 5:
+                    validateConfigFiles(Path.of(panelAttackDir));
+                    UserPrompt.promptForString("Press enter to continue...");
+
                     break;
                 default:
                     break;
@@ -121,19 +128,23 @@ public class Main {
 
     public static void doCharacters(Path characterDirPath) {
         ArrayList<PanelAttackCharacter> characterArrayList = new ArrayList<>();
-
+        int failedLoads = 0;
         // Find all the config.json files to determine character folders
         try (Stream<Path> pathStream = Files.walk(characterDirPath)) {
+            ArrayList<Path> configPaths = new ArrayList<>();
             pathStream.parallel()// parallel streams are better
                     .filter(Files::isRegularFile)// check if not a directory
-                    .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json")).map(t -> {
-                        try {
-                            return new PanelAttackCharacter(t);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            return null;
-                        }
-                    }).forEach(characterArrayList::add);
+                    .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json"))// find files
+                    .forEach(configPaths::add);
+
+            for (Path path : configPaths) {
+                try {
+                    PanelAttackCharacter character = new PanelAttackCharacter(path);
+                    characterArrayList.add(character);
+                } catch (Exception e) {
+                    failedLoads += 1;
+                }
+            }
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -160,6 +171,10 @@ public class Main {
             }
             sb.append("On - Enable all\n");
             sb.append("Off - Disable all\n");
+            if (failedLoads > 0) {
+                sb.append("Failed to load ").append(failedLoads)
+                        .append(" character(s). Please use the validate function for more details.");
+            }
             sb.append("\n");// create newline
             sb.append(
                     "Type the number of the character to toggle, \"on\" to enable all, \"off\" to disable all, or \"back\" to return to the menu.");
@@ -196,19 +211,23 @@ public class Main {
 
     public static void doStages(Path stageDirPath) {
         ArrayList<PanelAttackStage> stageArrayList = new ArrayList<>();
-
+        int failedLoads = 0;
         // Find all the config.json files to determine stage folders
         try (Stream<Path> pathStream = Files.walk(stageDirPath)) {
-            pathStream.parallel()// Parallel streams are better
-                    .filter(Files::isRegularFile)// Ensure path is not a directory
-                    .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json")).map(t -> {
-                        try {
-                            return new PanelAttackStage(t);
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                            return null;
-                        }
-                    }).forEach(stageArrayList::add);
+            ArrayList<Path> configPaths = new ArrayList<>();
+            pathStream.parallel()// parallel streams are better
+                    .filter(Files::isRegularFile)// check if not a directory
+                    .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json"))// find files
+                    .forEach(configPaths::add);
+
+            for (Path path : configPaths) {
+                try {
+                    PanelAttackStage character = new PanelAttackStage(path);
+                    stageArrayList.add(character);
+                } catch (Exception e) {
+                    failedLoads += 1;
+                }
+            }
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -236,6 +255,10 @@ public class Main {
             }
             sb.append("On - Enable all\n");
             sb.append("Off - Disable all\n");
+            if (failedLoads > 0) {
+                sb.append("Failed to load ").append(failedLoads)
+                        .append(" character(s). Please use the validate function for more details.");
+            }
             sb.append("\n");
             sb.append(
                     "Type the number of the stage to toggle, \"on\" to enable all, \"off\" to disable all, or \"back\" to return to the menu.");
@@ -346,6 +369,42 @@ public class Main {
         }
 
         return true;
+    }
+
+    public static void validateConfigFiles(Path dir) {
+        ArrayList<Path> configPaths = new ArrayList<>();
+
+        try (Stream<Path> pathStream = Files.walk(dir)) {
+            pathStream.parallel()// parallel streams are better
+                    .filter(Files::isRegularFile)// check if not a directory
+                    .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json")).forEach(configPaths::add);
+
+        } catch (IOException e) {
+        }
+        StringBuilder sb = new StringBuilder();
+        final String JSON_ERROR_SUFFIX = " [JSON ERROR]\n";
+        final String IO_ERROR_SUFFIX = " [I/O ERROR]\n";
+
+        for (Path configPath : configPaths) {
+
+            try {
+                JSONObject configjson = new JSONObject(Files.readString(configPath));
+                configjson.getString("id");
+                configjson.optString("name");
+            } catch (JSONException e) {
+                sb.append(configPath.toAbsolutePath()).append(JSON_ERROR_SUFFIX);
+
+            } catch (IOException e) {
+                sb.append(configPath.toAbsolutePath()).append(IO_ERROR_SUFFIX);
+            }
+        }
+        final String badFiles = sb.toString().trim();
+        if (badFiles.isBlank()) {
+            System.out.println("All files are valid!");
+        } else {
+            System.out.println(badFiles);
+        }
+
     }
 
 }
