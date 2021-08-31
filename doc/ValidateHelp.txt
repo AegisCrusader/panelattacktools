@@ -1,0 +1,7 @@
+The Validate function iterates through all config.json files found inside the Panel Attack folder and reads them to test their validity. Any config.json file that is found to have problems will have it's absolute path displayed.
+
+In most cases, any problems found will be an issue with the syntax of the config.json file. There are two possibilities.
+
+[JSON WARNING]: A syntax problem was found with the config.json file. However, the mod manager was able to read it regardless due to flexibility and accomodations made in programming. It is recommended that you fix this file.
+
+[JSON ERROR]: A syntax problem was found with the config.json file. The mod manager is unable to read the file, and it is likely Panel Attack will not be able to read it either. The manager will ignore this file in all other functions and it will not be displayed until the issue is corrected. 

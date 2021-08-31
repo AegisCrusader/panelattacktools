@@ -19,7 +19,7 @@ public class UserPrompt {
         try {
             input = keyboard.readLine();
         } catch (IOException e) {
-
+e.printStackTrace();
         }
         return input;
     }

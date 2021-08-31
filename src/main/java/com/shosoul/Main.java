@@ -1,5 +1,6 @@
 package com.shosoul;
 
+import java.awt.Desktop;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -8,8 +9,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.stream.Stream;
-import java.awt.Desktop;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -17,22 +18,20 @@ import org.json.JSONObject;
  *
  */
 public class Main {
-    public static String panelAttackDir;
+    private static Path panelAttackDir = Paths.get(getAppDataDirectory() + "\\Panel Attack\\");
     private static boolean includeDefaults = false;
 
+
     public static void main(String[] args) {
-
-        panelAttackDir = getAppDataDirectory() + "\\Panel Attack\\";
-        if (Files.exists(Paths.get(panelAttackDir))) {
-            final String characterDir = panelAttackDir + "characters\\";
-            final String stageDir = panelAttackDir + "stages\\";
-
+        if (Files.exists(panelAttackDir)) {
+            final String characterDir = panelAttackDir + "\\characters\\";
+            final String stageDir = panelAttackDir + "\\stages\\";
             Path characterDirPath = Paths.get(new File(characterDir).toURI());
             Path stageDirPath = Paths.get(new File(stageDir).toURI());
             while (true) {
                 CLS.clearConsoleScreen();
                 int modSelection = UserPrompt.promptForint(
-                        "0 - Exit\n1 - Characters\n2 - Stages\n3 - Mod Creator\n4 - Open Panel Attack Folder\n5 - Validate config files\n\nEnter option:");
+                        "0 - Exit\n1 - Characters\n2 - Stages\n3 - Mod Creator\n4 - Open Panel Attack Folder\n5 - Validate config files\n6 - Help\n\nEnter option:");
                 CLS.clearConsoleScreen();
                 switch (modSelection) {
                 case 1:
@@ -93,7 +92,7 @@ public class Main {
                 case 4:
 
                     Desktop desktop = null; // On Windows, retrieve the path of the "Panel Attack" folder
-                    File file = new File(panelAttackDir);
+                    File file = panelAttackDir.toFile();
 
                     try {
                         if (Desktop.isDesktopSupported()) {
@@ -107,9 +106,13 @@ public class Main {
                     break;
 
                 case 5:
-                    validateConfigFiles(Path.of(panelAttackDir));
+                    validateConfigFiles(panelAttackDir);
                     UserPrompt.promptForString("Press enter to continue...");
 
+                    break;
+
+                case 6:
+                    getHelp();
                     break;
                 default:
                     break;
@@ -126,7 +129,33 @@ public class Main {
 
     }
 
-    public static void doCharacters(Path characterDirPath) {
+    public static JSONObject repairjson(String json) {
+        ArrayList<String> lineList = new ArrayList<>();
+        StringBuilder line2electricboogaloo = new StringBuilder();
+        json.lines().forEachOrdered(lineList::add);
+
+        for (String string : lineList) {
+            if (string.trim().equalsIgnoreCase("{") || string.trim().equalsIgnoreCase("}")) {
+                line2electricboogaloo.append(string);
+            } else if (string.endsWith(",")) {
+                line2electricboogaloo.append(string);
+            } else {
+                String repairAttempt = string + ",";
+                line2electricboogaloo.append(repairAttempt);
+            }
+        }
+        try {
+            JSONObject configjson = new JSONObject(line2electricboogaloo.toString());
+            configjson.getString("id");
+            configjson.optString("name");
+            return configjson;
+        } catch (JSONException e) {
+        }
+
+        return null;
+    }
+
+    private static void doCharacters(Path characterDirPath) {
         ArrayList<PanelAttackCharacter> characterArrayList = new ArrayList<>();
         int failedLoads = 0;
         // Find all the config.json files to determine character folders
@@ -135,14 +164,27 @@ public class Main {
             pathStream.parallel()// parallel streams are better
                     .filter(Files::isRegularFile)// check if not a directory
                     .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json"))// find files
-                    .forEach(configPaths::add);
+                    .forEachOrdered(configPaths::add);
 
             for (Path path : configPaths) {
                 try {
                     PanelAttackCharacter character = new PanelAttackCharacter(path);
                     characterArrayList.add(character);
                 } catch (Exception e) {
-                    failedLoads += 1;
+
+                    try {
+                        JSONObject repairedjson = repairjson(Files.readString(path));
+                        if (repairedjson != null) {
+                            PanelAttackCharacter repairedCharacter = new PanelAttackCharacter(path, repairedjson);
+                            characterArrayList.add(repairedCharacter);
+                        } else {
+                            failedLoads += 1;
+                        }
+
+                    } catch (Exception e1) {
+                        failedLoads += 1;
+                    }
+
                 }
             }
 
@@ -154,6 +196,17 @@ public class Main {
          */
         if (!includeDefaults) {
             characterArrayList.removeIf(PanelAttackCharacter::isDefault);
+        }
+        ArrayList<String> subIDList = new ArrayList<>();
+        for (PanelAttackCharacter panelAttackCharacter : characterArrayList) {
+
+            JSONArray array = panelAttackCharacter.getConfigjson().optJSONArray("sub_ids");
+            if (array != null) {
+                array.toList().forEach(subID -> subIDList.add((String) subID));
+            }
+        }
+        for (String subid : subIDList) {
+            characterArrayList.removeIf(character -> character.getId().equals(subid));
         }
 
         try {
@@ -177,7 +230,7 @@ public class Main {
             }
             sb.append("\n");// create newline
             sb.append(
-                    "Type the number of the character to toggle, \"on\" to enable all, \"off\" to disable all, or \"back\" to return to the menu.");
+                    "Type the numbers of the characters you wish to toggle, seperated by commas. Otherwise, type \"on\" to enable all, \"off\" to disable all, or \"back\" to return to the menu.");
             String characterSelection = UserPrompt.promptForString(sb.toString());
 
             if (!characterSelection.equalsIgnoreCase("back")) {
@@ -197,19 +250,30 @@ public class Main {
                     }
                     // Toggle selected character
                 } else {
-                    characterArrayList.get(Integer.parseInt(characterSelection)).toggleCharacter();
+                    String[] selections = characterSelection.split("[\\,]+");
+                    ArrayList<PanelAttackCharacter> selectedArrayList = new ArrayList<>();
+
+                    for (String string : selections) {
+                        int selection = Integer.parseInt(string.trim());
+                        selectedArrayList.add(characterArrayList.get(selection));
+                    }
 
                 }
             }
-            CLS.clearConsoleScreen();
+            // CLS.clearConsoleScreen();
 
         } catch (Exception e) {
             e.printStackTrace();
+            UserPrompt.promptForString("Press enter to continue...");
+
+        } finally {
+            UserPrompt.promptForString("Press enter to continue...");
+
         }
 
     }
 
-    public static void doStages(Path stageDirPath) {
+    private static void doStages(Path stageDirPath) {
         ArrayList<PanelAttackStage> stageArrayList = new ArrayList<>();
         int failedLoads = 0;
         // Find all the config.json files to determine stage folders
@@ -218,14 +282,26 @@ public class Main {
             pathStream.parallel()// parallel streams are better
                     .filter(Files::isRegularFile)// check if not a directory
                     .filter(f -> f.toFile().getAbsolutePath().endsWith("config.json"))// find files
-                    .forEach(configPaths::add);
+                    .forEachOrdered(configPaths::add);
 
             for (Path path : configPaths) {
                 try {
                     PanelAttackStage character = new PanelAttackStage(path);
                     stageArrayList.add(character);
                 } catch (Exception e) {
-                    failedLoads += 1;
+
+                    try {
+                        JSONObject repairedjson = repairjson(Files.readString(path));
+                        if (repairedjson != null) {
+                            PanelAttackStage repairedCharacter = new PanelAttackStage(path, repairedjson);
+                            stageArrayList.add(repairedCharacter);
+                        } else {
+                            failedLoads += 1;
+                        }
+
+                    } catch (Exception e1) {
+                        failedLoads += 1;
+                    }
                 }
             }
 
@@ -237,6 +313,18 @@ public class Main {
          */
         if (!includeDefaults) {
             stageArrayList.removeIf(PanelAttackStage::isDefault);
+        }
+        ArrayList<String> subIDList = new ArrayList<>();
+
+        for (PanelAttackStage panelAttackStage : stageArrayList) {
+
+            JSONArray array = panelAttackStage.getConfigjson().optJSONArray("sub_ids");
+            if (array != null) {
+                array.toList().forEach(subID -> subIDList.add((String) subID));
+            }
+        }
+        for (String subid : subIDList) {
+            stageArrayList.removeIf(character -> character.getId().equals(subid));
         }
 
         try {
@@ -261,7 +349,7 @@ public class Main {
             }
             sb.append("\n");
             sb.append(
-                    "Type the number of the stage to toggle, \"on\" to enable all, \"off\" to disable all, or \"back\" to return to the menu.");
+                    "Type the numbers of the stages you wish to toggle, seperated by commas. Otherwise, type \"on\" to enable all, \"off\" to disable all, or \"back\" to return to the menu.");
             String stageSelection = UserPrompt.promptForString(sb.toString());
 
             if (!stageSelection.equalsIgnoreCase("back")) {
@@ -281,7 +369,12 @@ public class Main {
                     }
                     // Toggle selected stage
                 } else {
-                    stageArrayList.get(Integer.parseInt(stageSelection)).toggleStage();
+                    String[] selections = stageSelection.split("[\\,]+");
+                    for (String string : selections) {
+                        int selection = Integer.parseInt(string.trim());
+                        stageArrayList.get(selection).toggleStage();
+
+                    }
 
                 }
             }
@@ -316,7 +409,7 @@ public class Main {
     }
 
     // TODO:finish creation of advanced modmaker
-    public static boolean createMod(String parentDir) {
+    private static boolean createMod(String parentDir) {
         JSONObject configjson = new JSONObject();
 
         try {
@@ -329,7 +422,7 @@ public class Main {
             configjson.put("name", name);
             try (FileWriter fw = new FileWriter(newModFolderPath + "\\config.json")) {
 
-                fw.write(configjson.toString());
+                fw.write(configjson.toString(1));
             } catch (Exception e) {
                 e.printStackTrace();
                 System.exit(1);
@@ -341,7 +434,7 @@ public class Main {
         return true;
     }
 
-    public static boolean createCharacterMod(String parentDir) {
+    private static boolean createCharacterMod(String parentDir) {
         JSONObject configjson = new JSONObject();
 
         try {
@@ -359,7 +452,7 @@ public class Main {
 
             try (FileWriter fw = new FileWriter(newModFolderPath + "\\config.json")) {
 
-                fw.write(configjson.toString());
+                fw.write(configjson.toString(1));
             } catch (Exception e) {
                 e.printStackTrace();
                 System.exit(1);
@@ -371,7 +464,9 @@ public class Main {
         return true;
     }
 
-    public static void validateConfigFiles(Path dir) {
+    private static void validateConfigFiles(Path dir) {
+        int configFileTotal = 0;
+        int flaggedFileTotal = 0;
         ArrayList<Path> configPaths = new ArrayList<>();
 
         try (Stream<Path> pathStream = Files.walk(dir)) {
@@ -382,29 +477,80 @@ public class Main {
         } catch (IOException e) {
         }
         StringBuilder sb = new StringBuilder();
+        final String JSON_WARNING_SUFFIX = " [JSON WARNING]\n";
         final String JSON_ERROR_SUFFIX = " [JSON ERROR]\n";
         final String IO_ERROR_SUFFIX = " [I/O ERROR]\n";
 
         for (Path configPath : configPaths) {
-
+            configFileTotal += 1;
             try {
                 JSONObject configjson = new JSONObject(Files.readString(configPath));
                 configjson.getString("id");
                 configjson.optString("name");
+
             } catch (JSONException e) {
-                sb.append(configPath.toAbsolutePath()).append(JSON_ERROR_SUFFIX);
+                flaggedFileTotal += 1;
+                sb.append(configPath.toAbsolutePath());
+
+                try {
+                    if (repairjson(Files.readString(configPath)) != null) {
+                        sb.append(JSON_WARNING_SUFFIX);
+                    } else {
+                        sb.append(JSON_ERROR_SUFFIX);
+                    }
+                } catch (IOException e1) {
+                    e1.printStackTrace();
+                }
 
             } catch (IOException e) {
+                flaggedFileTotal += 1;
                 sb.append(configPath.toAbsolutePath()).append(IO_ERROR_SUFFIX);
             }
         }
         final String badFiles = sb.toString().trim();
         if (badFiles.isBlank()) {
-            System.out.println("All files are valid!");
+            System.out.println("All files are valid! Validated " + configFileTotal + " files.");
         } else {
-            System.out.println(badFiles);
+            System.out.println(badFiles + "\nFlagged " + flaggedFileTotal + " out of " + configFileTotal + " files.");
         }
 
     }
 
+    private static void getHelp() {
+        CLS.clearConsoleScreen();
+        int helpPage = 0;
+        helpPage = UserPrompt.promptForint("5 - Validate Config Files");
+        CLS.clearConsoleScreen();
+
+        switch (helpPage) {
+
+        case 1:
+
+            break;
+        case 2:
+
+            break;
+        case 3:
+
+            break;
+        case 5:
+            try {
+                System.out.println(Files.readString(Paths.get("./doc/ValidateHelp.txt")));
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            UserPrompt.promptForString("Press enter to continue...");
+
+            break;
+        default:
+            break;
+        }
+    }
+
+    /**
+     * @return the panelAttackDir
+     */
+    public static Path getPanelAttackDir() {
+        return panelAttackDir;
+    }
 }

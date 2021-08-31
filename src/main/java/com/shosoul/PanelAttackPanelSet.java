@@ -8,11 +8,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
-import org.json.JSONArray;
 import org.json.JSONObject;
 
-public class PanelAttackStage {
-    private static final String DEFAULT_ID_PREFIX = "pa_stages";
+public class PanelAttackPanelSet {
+    private static final String DEFAULT_ID = "Panel Attack";
     private Path configPath;
     private JSONObject configjson;
     private String id;
@@ -23,34 +22,44 @@ public class PanelAttackStage {
     private boolean isDisabledByGrandParent;
 
     /**
-     * @return whether or not the stage is a default stage
+     * @return whether or not the panel set is a default panel set
      */
     public boolean isDefault() {
         return isDefault;
     }
 
     /**
-     * A class containing information about a stage.
+     * A class containing information about a panel set.
      * 
-     * @param configPath the path to the character config.json file
+     * @param configPath the path to the panel set config.json file
      * @throws IOException if the configPath does not lead to a valid config file
      */
-    public PanelAttackStage(Path configPath) throws IOException {
+    public PanelAttackPanelSet(Path configPath) throws IOException {
         this.configPath = configPath;
         configjson = new JSONObject(Files.readString(configPath));
         id = configjson.getString("id");
-        name = configjson.getString("name");
+        String dirName = this.configPath.getParent().getFileName().toString();
+        if (dirName.startsWith("__")) {
+            name = dirName.substring(2);
+        } else {
+            name = dirName;
+        }
         isEnabled = !configPath.getParent().getFileName().toString().startsWith("__");
-        isDefault = id.startsWith(DEFAULT_ID_PREFIX);
+        isDefault = id.equals(DEFAULT_ID);
     }
 
-    public PanelAttackStage(Path configPath, JSONObject configjson) {
+    public PanelAttackPanelSet(Path configPath, JSONObject configjson) {
         this.configPath = configPath;
         this.configjson = configjson;
         id = configjson.getString("id");
-        name = configjson.getString("name");
+        String dirName = this.configPath.getParent().getFileName().toString();
+        if (dirName.startsWith("__")) {
+            name = dirName.substring(2);
+        } else {
+            name = dirName;
+        }
         isEnabled = !configPath.getParent().getFileName().toString().startsWith("__");
-        isDefault = id.startsWith(DEFAULT_ID_PREFIX);
+        isDefault = id.equals(DEFAULT_ID);
     }
 
     /**
@@ -89,7 +98,7 @@ public class PanelAttackStage {
     }
 
     /**
-     * @return if the stage is enabled or not
+     * @return if the panel set is enabled or not
      */
     public boolean isEnabled() {
         isEnabled = !configPath.getParent().getFileName().toString().startsWith("__");
@@ -103,17 +112,17 @@ public class PanelAttackStage {
         this.isEnabled = isEnabled;
     }
 
-    public Path getStageFolder() {
+    public Path getPanelSetFolder() {
         return configPath.getParent();
     }
 
     /**
      * Toggles the stage.
      * 
-     * @return if the stage was toggled successfully.
+     * @return if the panel set was toggled successfully.
      */
-    public boolean toggleStage() {
-        String oldDirName = getStageFolder().getFileName().toString();
+    public boolean togglePanelSet() {
+        String oldDirName = getPanelSetFolder().getFileName().toString();
         try {
             String newDirName;
             if (oldDirName.startsWith("__")) {
@@ -121,9 +130,8 @@ public class PanelAttackStage {
             } else {
                 newDirName = "__" + oldDirName;
             }
-            Path newParentPath = Files.move(getStageFolder(), getStageFolder().resolveSibling(newDirName));
+            Path newParentPath = Files.move(getPanelSetFolder(), getPanelSetFolder().resolveSibling(newDirName));
             setConfigPath(newParentPath.resolve("config.json"));
-            System.out.println(configPath.toAbsolutePath());
             setEnabled(!isEnabled);
 
         } catch (Exception e) {
@@ -135,7 +143,7 @@ public class PanelAttackStage {
     }
 
     public boolean isDisabledByGrandParent() {
-        Path relativePath = Main.getPanelAttackDir().resolve("stages").relativize(configPath.getParent().getParent());
+        Path relativePath = Main.getPanelAttackDir().resolve("panels").relativize(configPath.getParent().getParent());
         if (relativePath.toString().contains("__")) {
             isDisabledByGrandParent = true;
         }
@@ -143,12 +151,12 @@ public class PanelAttackStage {
 
     }
 
-    public static List<PanelAttackStage> getStages(boolean addDefaults) {
-        List<PanelAttackStage> stageArrayList = new ArrayList<>();
+    public static List<PanelAttackPanelSet> getPanelSets(boolean addDefaults) {
+        List<PanelAttackPanelSet> panelsetArrayList = new ArrayList<>();
         int failedLoads = 0;
-        // Find all the config.json files to determine stage folders
+        // Find all the config.json files to determine panel set folders
         try (Stream<Path> pathStream = Files
-                .walk(Paths.get(Main.getAppDataDirectory()).resolve("Panel Attack").resolve("stages"))) {
+                .walk(Paths.get(Main.getAppDataDirectory()).resolve("Panel Attack").resolve("panels"))) {
             List<Path> configPaths = new ArrayList<>();
             pathStream.parallel()// parallel streams are better
                     .filter(Files::isRegularFile)// check if not a directory
@@ -157,15 +165,15 @@ public class PanelAttackStage {
 
             for (Path path : configPaths) {
                 try {
-                    PanelAttackStage stage = new PanelAttackStage(path);
-                    stageArrayList.add(stage);
+                    PanelAttackPanelSet panelset = new PanelAttackPanelSet(path);
+                    panelsetArrayList.add(panelset);
                 } catch (Exception e) {
 
                     try {
                         JSONObject repairedjson = Main.repairjson(Files.readString(path));
                         if (repairedjson != null) {
-                            PanelAttackStage repairedStage = new PanelAttackStage(path, repairedjson);
-                            stageArrayList.add(repairedStage);
+                            PanelAttackPanelSet repairedPanelSet = new PanelAttackPanelSet(path, repairedjson);
+                            panelsetArrayList.add(repairedPanelSet);
                         } else {
                             failedLoads += 1;
                         }
@@ -176,27 +184,17 @@ public class PanelAttackStage {
 
                 }
             }
-            List<String> subIDList = new ArrayList<>();
-            for (PanelAttackStage panelAttackStage : stageArrayList) {
-                JSONArray array = panelAttackStage.getConfigjson().optJSONArray("sub_ids");
-                if (array != null) {
-                    array.toList().forEach(subID -> subIDList.add((String) subID));
-                }
-            }
-            for (String subid : subIDList) {
-                stageArrayList.removeIf(stage -> stage.getId().equals(subid));
-            }
         } catch (Exception e) {
             e.printStackTrace();
         }
         /**
-         * If the modloader should also list default stages. If not, remove them.
+         * If the modloader should also list default panels. If not, remove them.
          */
         if (!addDefaults) {
-            stageArrayList.removeIf(PanelAttackStage::isDefault);
+            panelsetArrayList.removeIf(PanelAttackPanelSet::isDefault);
         }
         // TODO Sort by mod or alphabetically or something
-        return stageArrayList;
+        return panelsetArrayList;
     }
 
 }

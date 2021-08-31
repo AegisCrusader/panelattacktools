@@ -1,6 +1,8 @@
 module panelModule {
     requires java.base;
-    requires static org.json;
-    requires java.desktop;
+    requires static transitive org.json;
+    requires transitive java.desktop;
     exports com.shosoul;
 }
+
+

@@ -1,6 +1,11 @@
-com\shosoul\PanelAttackCharacter.class
-com\shosoul\UserPrompt.class
+com\shosoul\ModManager.class
+com\shosoul\ZIPManager.class
+com\shosoul\PanelAttackPanelSet.class
+com\shosoul\PanelAttackTheme.class
 module-info.class
 com\shosoul\Main.class
 com\shosoul\CLS.class
+com\shosoul\PanelAttackCharacter.class
+com\shosoul\ModManager$1.class
+com\shosoul\UserPrompt.class
 com\shosoul\PanelAttackStage.class
