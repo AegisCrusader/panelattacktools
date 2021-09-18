@@ -1,2 +1,2 @@
-# panelattackmodmanager
-This is a mod manager for Panel Attack.
+# panelattacktools
+This is a mod manager and tool program for Panel Attack.
